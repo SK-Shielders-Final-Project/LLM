@@ -1,54 +1,70 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any, Optional
+
+import requests
 
 from app.core.settings import GetSettings
-
-
-class VllmService:
-    def __init__(self) -> None:
-        settings = GetSettings()
-        self.model_id = settings.model_id
-        try:
-            from vllm import LLM, SamplingParams  # type: ignore
-        except Exception as exc:  # pragma: no cover - optional dependency
-            raise RuntimeError("vllm is required to run the model") from exc
-
-        self._llm = LLM(
-            model=self.model_id,
-            dtype="float16",
-            trust_remote_code=settings.trust_remote_code,
-        )
-        self._sampling_params = SamplingParams(
-            temperature=settings.temperature,
-            top_p=settings.top_p,
-            max_tokens=settings.max_tokens,
-            stop=["User:"],
-        )
-
-    def Generate(self, prompt: str) -> str:
-        outputs = self._llm.generate([prompt], self._sampling_params)
-        if not outputs or not outputs[0].outputs:
-            return ""
-        return outputs[0].outputs[0].text.strip()
 
 
 class LLMService:
     def __init__(self) -> None:
         settings = GetSettings()
+        self._settings = settings
         self.model_id = settings.model_id
-        self._backend: VllmService | None = None
+        self._base_url = self._normalize_base_url(settings.llm_base_url)
 
-    def _EnsureBackend(self) -> VllmService:
-        if self._backend is not None:
-            return self._backend
+    def _normalize_base_url(self, base_url: str) -> str:
+        base_url = base_url.rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url = f"{base_url}/v1"
+        return base_url
 
-        self._backend = VllmService()
-        return self._backend
+    def _fetch_first_model_id(self) -> Optional[str]:
+        url = f"{self._base_url}/models"
+        response = requests.get(url, timeout=self._settings.llm_timeout_sec)
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        models = data.get("data") or []
+        if not models:
+            return None
+        return models[0].get("id")
 
     def Generate(self, prompt: str) -> str:
-        backend = self._EnsureBackend()
-        return backend.Generate(prompt)
+        url = f"{self._base_url}/chat/completions"
+        payload = {
+            "model": self.model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": self._settings.temperature,
+            "top_p": self._settings.top_p,
+            "max_tokens": self._settings.max_tokens,
+        }
+        headers = {"Authorization": f"Bearer {self._settings.llm_api_key}"}
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=self._settings.llm_timeout_sec,
+        )
+        if response.status_code == 404:
+            fallback_model_id = self._fetch_first_model_id()
+            if fallback_model_id and fallback_model_id != payload["model"]:
+                payload["model"] = fallback_model_id
+                self.model_id = fallback_model_id
+                response = requests.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=self._settings.llm_timeout_sec,
+                )
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+        message = choices[0].get("message") or {}
+        return message.get("content") or ""
 
 
 @lru_cache(maxsize=1)

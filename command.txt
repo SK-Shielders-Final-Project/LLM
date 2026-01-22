@@ -5,6 +5,8 @@ python -m venv venv
 source .venv/bin/activate
 source venv/Scripts/activate
 
+source venv/bin/activate
+
 ## 현재 설치된 패키지 리스트를 파일로 저장
 pip3 freeze > tool.txt
 
