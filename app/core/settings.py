@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import os
 
@@ -10,6 +10,7 @@ def _env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+## dotENV에서 변수명 가져오기
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "LLM-SecLab Scooter Assistant")
@@ -29,10 +30,12 @@ class Settings:
     pricing_table: str = os.getenv("PRICING_TABLE", "scooter_pricing_summary")
     usage_table: str = os.getenv("USAGE_TABLE", "scooter_usage_summary")
 
-    cors_allow_origins: list[str] = (
-        os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")
-        if os.getenv("CORS_ALLOW_ORIGINS")
-        else ["*"]
+    cors_allow_origins: list[str] = field(
+        default_factory=lambda: (
+            os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")
+            if os.getenv("CORS_ALLOW_ORIGINS")
+            else ["*"]
+        )
     )
 
 

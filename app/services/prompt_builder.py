@@ -31,6 +31,7 @@ def build_usage_summary_prompt(usage_summary: dict[str, Any], locale: str) -> st
     )
 
 
+## 프롬프트 DTO 같은 느낌
 def build_assistant_prompt(
     message: str,
     pricing_summary: dict[str, Any],
