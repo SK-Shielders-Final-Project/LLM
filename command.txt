@@ -1,0 +1,14 @@
+## venv 초기 설정
+python -m venv venv
+
+## 가상환경 실행
+source .venv/bin/activate
+
+## 현재 설치된 패키지 리스트를 파일로 저장
+pip3 freeze > tool.txt
+
+## 라이브러리 다운
+pip3 install -r tool.txt
+
+## 프로그램 실행
+uvicorn main:app --reload
