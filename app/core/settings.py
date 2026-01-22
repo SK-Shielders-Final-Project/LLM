@@ -2,8 +2,13 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 import os
 
+from dotenv import load_dotenv
 
-def _env_bool(name: str, default: bool) -> bool:
+
+load_dotenv()
+
+
+def _EnvBool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
@@ -20,15 +25,25 @@ class Settings:
     temperature: float = float(os.getenv("TEMPERATURE", "0.3"))
     top_p: float = float(os.getenv("TOP_P", "0.9"))
     max_tokens: int = int(os.getenv("MAX_TOKENS", "512"))
-    trust_remote_code: bool = _env_bool("TRUST_REMOTE_CODE", True)
+    trust_remote_code: bool = _EnvBool("TRUST_REMOTE_CODE", True)
 
-    use_mock_llm: bool = _env_bool("USE_MOCK_LLM", True)
-    use_mock_data: bool = _env_bool("USE_MOCK_DATA", True)
-    sandbox_mode: bool = _env_bool("SANDBOX_MODE", True)
+    db_backend: str = os.getenv("DB_BACKEND", "mysql")
 
-    aws_region: str = os.getenv("AWS_REGION", "ap-northeast-2")
-    pricing_table: str = os.getenv("PRICING_TABLE", "scooter_pricing_summary")
-    usage_table: str = os.getenv("USAGE_TABLE", "scooter_usage_summary")
+    mysql_host: str = os.getenv("MYSQL_HOST", "")
+    mysql_port: int = int(os.getenv("MYSQL_PORT", "3306"))
+    mysql_user: str = os.getenv("MYSQL_USER", "")
+    mysql_password: str = os.getenv("MYSQL_PASSWORD", "")
+    mysql_database: str = os.getenv("MYSQL_DATABASE", "")
+
+    users_table: str = os.getenv("USERS_TABLE", "users")
+    rentals_table: str = os.getenv("RENTALS_TABLE", "rentals")
+    payments_table: str = os.getenv("PAYMENTS_TABLE", "payments")
+    bikes_table: str = os.getenv("BIKES_TABLE", "bikes")
+
+    bastion_host: str = os.getenv("BASTION_HOST", "")
+    bastion_port: int = int(os.getenv("BASTION_PORT", "22"))
+    bastion_user: str = os.getenv("BASTION_USER", "")
+    bastion_key_path: str = os.getenv("BASTION_KEY_PATH", "")
 
     cors_allow_origins: list[str] = field(
         default_factory=lambda: (
@@ -40,5 +55,5 @@ class Settings:
 
 
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
+def GetSettings() -> Settings:
     return Settings()

@@ -7,12 +7,12 @@ from app.schemas import (
     SummaryResponse,
     UsageSummaryRequest,
 )
-from app.services.data_store import get_data_store
-from app.services.llm_service import get_llm_service
+from app.services.data_store import GetDataStore
+from app.services.llm_service import GetLlmService
 from app.services.prompt_builder import (
-    build_assistant_prompt,
-    build_price_summary_prompt,
-    build_usage_summary_prompt,
+    BuildAssistantPrompt,
+    BuildPriceSummaryPrompt,
+    BuildUsageSummaryPrompt,
 )
 
 
@@ -20,63 +20,63 @@ router = APIRouter()
 
 
 @router.post("/v1/summary/price", response_model=SummaryResponse)
-def summarize_price(payload: PriceSummaryRequest) -> SummaryResponse:
-    data_store = get_data_store()
-    pricing = data_store.get_pricing_summary(payload.user_id, payload.period)
+def SummarizePrice(payload: PriceSummaryRequest) -> SummaryResponse:
+    data_store = GetDataStore()
+    pricing = data_store.GetPricingSummary(payload.user_id, None)
     if not pricing:
         raise HTTPException(status_code=404, detail="pricing data not found")
 
-    prompt = build_price_summary_prompt(
+    prompt = BuildPriceSummaryPrompt(
         pricing_summary=pricing,
-        locale=payload.locale,
+        locale="ko-KR",
     )
-    summary = get_llm_service().generate(prompt)
+    summary = GetLlmService().Generate(prompt)
 
     return SummaryResponse(
         summary=summary,
         data=pricing,
-        model_used=get_llm_service().model_id,
+        model_used=GetLlmService().model_id,
     )
 
 
 @router.post("/v1/summary/usage", response_model=SummaryResponse)
-def summarize_usage(payload: UsageSummaryRequest) -> SummaryResponse:
-    data_store = get_data_store()
-    usage = data_store.get_usage_summary(payload.user_id, payload.period)
+def SummarizeUsage(payload: UsageSummaryRequest) -> SummaryResponse:
+    data_store = GetDataStore()
+    usage = data_store.GetUsageSummary(payload.user_id, None)
     if not usage:
         raise HTTPException(status_code=404, detail="usage data not found")
 
-    prompt = build_usage_summary_prompt(
+    prompt = BuildUsageSummaryPrompt(
         usage_summary=usage,
-        locale=payload.locale,
+        locale="ko-KR",
     )
-    summary = get_llm_service().generate(prompt)
+    summary = GetLlmService().Generate(prompt)
 
     return SummaryResponse(
         summary=summary,
         data=usage,
-        model_used=get_llm_service().model_id,
+        model_used=GetLlmService().model_id,
     )
 
 
 @router.post("/v1/assistant", response_model=AssistantResponse)
-def assistant(payload: AssistantRequest) -> AssistantResponse:
-    data_store = get_data_store()
+def Assistant(payload: AssistantRequest) -> AssistantResponse:
+    data_store = GetDataStore()
     pricing = {}
     usage = {}
 
     if payload.include_pricing:
-        pricing = data_store.get_pricing_summary(payload.user_id, payload.period)
+        pricing = data_store.GetPricingSummary(payload.user_id, payload.period)
     if payload.include_usage:
-        usage = data_store.get_usage_summary(payload.user_id, payload.period)
+        usage = data_store.GetUsageSummary(payload.user_id, payload.period)
 
-    prompt = build_assistant_prompt(
+    prompt = BuildAssistantPrompt(
         message=payload.message,
         pricing_summary=pricing,
         usage_summary=usage,
         locale=payload.locale,
     )
-    reply = get_llm_service().generate(prompt)
+    reply = GetLlmService().Generate(prompt)
 
     return AssistantResponse(
         reply=reply,
@@ -84,5 +84,5 @@ def assistant(payload: AssistantRequest) -> AssistantResponse:
             "pricing": pricing,
             "usage": usage,
         },
-        model_used=get_llm_service().model_id,
+        model_used=GetLlmService().model_id,
     )

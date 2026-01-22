@@ -9,30 +9,30 @@ SYSTEM_INSTRUCTION = (
 )
 
 
-def _as_json(data: dict[str, Any]) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=2)
+def _AsJson(data: dict[str, Any]) -> str:
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
 
 
-def build_price_summary_prompt(pricing_summary: dict[str, Any], locale: str) -> str:
+def BuildPriceSummaryPrompt(pricing_summary: dict[str, Any], locale: str) -> str:
     return (
         f"System: {SYSTEM_INSTRUCTION}\n"
         f"User: 가격 요약을 {locale}로 작성해줘.\n"
-        f"PricingData:\n{_as_json(pricing_summary)}\n"
+        f"PricingData:\n{_AsJson(pricing_summary)}\n"
         "Assistant:"
     )
 
 
-def build_usage_summary_prompt(usage_summary: dict[str, Any], locale: str) -> str:
+def BuildUsageSummaryPrompt(usage_summary: dict[str, Any], locale: str) -> str:
     return (
         f"System: {SYSTEM_INSTRUCTION}\n"
         f"User: 킥보드 사용 내역을 {locale}로 요약해줘.\n"
-        f"UsageData:\n{_as_json(usage_summary)}\n"
+        f"UsageData:\n{_AsJson(usage_summary)}\n"
         "Assistant:"
     )
 
 
 ## 프롬프트 DTO 같은 느낌
-def build_assistant_prompt(
+def BuildAssistantPrompt(
     message: str,
     pricing_summary: dict[str, Any],
     usage_summary: dict[str, Any],
@@ -42,7 +42,7 @@ def build_assistant_prompt(
         f"System: {SYSTEM_INSTRUCTION}\n"
         f"User: {message}\n"
         f"Locale: {locale}\n"
-        f"PricingData:\n{_as_json(pricing_summary)}\n"
-        f"UsageData:\n{_as_json(usage_summary)}\n"
+        f"PricingData:\n{_AsJson(pricing_summary)}\n"
+        f"UsageData:\n{_AsJson(usage_summary)}\n"
         "Assistant:"
     )

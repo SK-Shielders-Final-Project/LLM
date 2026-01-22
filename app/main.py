@@ -2,13 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as v1_router
-from app.core.logging import configure_logging
-from app.core.settings import get_settings
+from app.core.logging import ConfigureLogging
+from app.core.settings import GetSettings
 
 
-def create_app() -> FastAPI:
-    settings = get_settings()
-    configure_logging(settings)
+def CreateApp() -> FastAPI:
+    settings = GetSettings()
+    ConfigureLogging(settings)
 
     app = FastAPI(
         title=settings.app_name,
@@ -26,14 +26,13 @@ def create_app() -> FastAPI:
     app.include_router(v1_router, prefix="/api")
 
     @app.get("/health")
-    def health() -> dict:
+    def Health() -> dict:
         return {
             "status": "ok",
-            "sandbox_mode": settings.sandbox_mode,
             "model_id": settings.model_id,
         }
 
     return app
 
 
-app = create_app()
+app = CreateApp()

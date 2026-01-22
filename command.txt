@@ -14,7 +14,7 @@ pip3 install -r tool.txt
 ## 프로그램 실행
 uvicorn app.main:app --reload
 
-
+--------------------------------------------------------
 ##### LLM 모델 실행 #####
 vllm serve "yanolja/YanoljaNEXT-EEVE-10.8B"
 
@@ -25,3 +25,4 @@ python app/app.py
 Win + R -> gpedit.msc 실행
 컴퓨터 구성 > 관리 템플릿 > 시스템 > 파일 시스템
 "Win32 긴 경로 사용(Enable Win32 long paths)"을 **사용(Enabled)**으로 변경
+---------------------------------------------------------
