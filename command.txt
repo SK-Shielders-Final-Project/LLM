@@ -3,6 +3,7 @@ python -m venv venv
 
 ## 가상환경 실행
 source .venv/bin/activate
+source venv/Scripts/activate
 
 ## 현재 설치된 패키지 리스트를 파일로 저장
 pip3 freeze > tool.txt
@@ -11,4 +12,16 @@ pip3 freeze > tool.txt
 pip3 install -r tool.txt
 
 ## 프로그램 실행
-uvicorn main:app --reload
+uvicorn app.main:app --reload
+
+
+##### LLM 모델 실행 #####
+vllm serve "yanolja/YanoljaNEXT-EEVE-10.8B"
+
+## 파이썬 스크립트로 추론 실행
+python app/app.py
+
+## 설치가 안된다면
+Win + R -> gpedit.msc 실행
+컴퓨터 구성 > 관리 템플릿 > 시스템 > 파일 시스템
+"Win32 긴 경로 사용(Enable Win32 long paths)"을 **사용(Enabled)**으로 변경
