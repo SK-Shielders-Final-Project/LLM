@@ -1,5 +1,3 @@
-🛡️ LLM-SecLab: Implementation & Penetration Testing
-이 리포지토리는 거대언어모델(LLM)의 직접적인 구현과 해당 모델 및 애플리케이션에 대한 **보안 취약점 진단(모의해킹)**을 연구하기 위한 프로젝트입니다. LLM 아키텍처의 이해를 바탕으로, 실제 발생 가능한 공격 벡터를 식별하고 대응 방안을 제시합니다.
-
-
+[Model Info]
+https://huggingface.co/yanolja/YanoljaNEXT-EEVE-10.8B?local-app=vllm
 
