@@ -1,32 +1,38 @@
-from typing import Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-class PriceSummaryRequest(BaseModel):
-    user_id: str = Field(..., examples=["1"])
+class LlmMessage(BaseModel):
+    role: Literal["system", "user", "assistant"] = Field(
+        ...,
+        examples=["system", "user", "assistant"],
+        description="메시지 역할",
+    )
+    user_id: int = Field(..., examples=[1], description="대화 소유 사용자 ID")
+    content: str = Field(
+        ...,
+        examples=[
+            "당신은 한국어로 친절하고 간결하게 답변하는 챗봇입니다.",
+            "안녕",
+        ],
+        description="메시지 본문",
+    )
 
-
-class UsageSummaryRequest(BaseModel):
-    user_id: str = Field(..., examples=["1"])
+    class Config:
+        str_strip_whitespace = True
 
 
 class AssistantRequest(BaseModel):
-    user_id: str = Field(..., examples=["1"])
-    period: Optional[str] = Field(None, examples=["2025-12"])
-    message: str = Field(..., examples=["이번 달 사용 요약해줘"])
-    locale: str = Field("ko-KR", examples=["ko-KR"])
-    include_pricing: bool = True
-    include_usage: bool = True
+    message: LlmMessage = Field(
+        ...,
+        description="단일 메시지",
+    )
 
-
-class SummaryResponse(BaseModel):
-    summary: str
-    data: dict
-    model_used: str
+    class Config:
+        str_strip_whitespace = True
 
 
 class AssistantResponse(BaseModel):
-    reply: str
-    data: dict
-    model_used: str
+    text: str
+    model: str

@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.core.settings import GetSettings
-from app.services.services_db import (
+from app.core.services_db import (
     GetPricingSummaryFromDb,
     GetUsageSummaryFromDb,
 )

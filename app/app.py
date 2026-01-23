@@ -1,5 +1,5 @@
 from app.core.settings import GetSettings
-from app.services.llm_service import GetLlmService
+from .core.llm_service import GetLlmService
 from app.services.prompt_builder import BuildAssistantPrompt
 from app.services.data_store import GetDataStore
 

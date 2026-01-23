@@ -31,11 +31,11 @@ class LLMService:
             return None
         return models[0].get("id")
 
-    def Generate(self, prompt: str) -> str:
+    def _PostChat(self, messages: list[dict[str, str]]) -> str:
         url = f"{self._base_url}/chat/completions"
         payload = {
             "model": self.model_id,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "temperature": self._settings.temperature,
             "top_p": self._settings.top_p,
             "max_tokens": self._settings.max_tokens,
@@ -65,6 +65,12 @@ class LLMService:
             return ""
         message = choices[0].get("message") or {}
         return message.get("content") or ""
+
+    def Generate(self, prompt: str) -> str:
+        return self.GenerateChat([{"role": "user", "content": prompt}])
+
+    def GenerateChat(self, messages: list[dict[str, str]]) -> str:
+        return self._PostChat(messages)
 
 
 @lru_cache(maxsize=1)

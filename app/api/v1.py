@@ -1,88 +1,67 @@
+import json
+
 from fastapi import APIRouter, HTTPException
 
-from app.schemas import (
-    AssistantRequest,
-    AssistantResponse,
-    PriceSummaryRequest,
-    SummaryResponse,
-    UsageSummaryRequest,
-)
+from app.schemas import AssistantRequest, AssistantResponse, LlmMessage
+from app.core.llm_service import GetLlmService
 from app.services.data_store import GetDataStore
-from app.services.llm_service import GetLlmService
-from app.services.prompt_builder import (
-    BuildAssistantPrompt,
-    BuildPriceSummaryPrompt,
-    BuildUsageSummaryPrompt,
-)
 
 
 router = APIRouter()
 
+DEFAULT_SYSTEM_MESSAGE = (
+    "당신은 한국어로 친절하고 간결하게 답변하는 챗봇입니다. "
+    "모든 답변은 반드시 한국어로만 작성하세요."
+)
 
-@router.post("/v1/summary/price", response_model=SummaryResponse)
-def SummarizePrice(payload: PriceSummaryRequest) -> SummaryResponse:
+def _ValidateMessage(message: LlmMessage) -> None:
+    if message.role != "user":
+        raise HTTPException(status_code=400, detail="message.role must be user")
+    if not message.content.strip():
+        raise HTTPException(status_code=400, detail="message.content is required")
+    if message.user_id <= 0:
+        raise HTTPException(status_code=400, detail="message.user_id must be positive")
+
+
+def _AsJson(data: dict) -> str:
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
+
+
+def _GenerateResponse(payload: AssistantRequest) -> AssistantResponse:
+    _ValidateMessage(payload.message)
     data_store = GetDataStore()
-    pricing = data_store.GetPricingSummary(payload.user_id, None)
-    if not pricing:
-        raise HTTPException(status_code=404, detail="pricing data not found")
-
-    prompt = BuildPriceSummaryPrompt(
-        pricing_summary=pricing,
-        locale="ko-KR",
+    user_id = str(payload.message.user_id)
+    pricing_summary = data_store.GetPricingSummary(user_id, None)
+    usage_summary = data_store.GetUsageSummary(user_id, None)
+    system_context = (
+        f"{DEFAULT_SYSTEM_MESSAGE}\n"
+        f"UserId: {user_id}\n"
+        "Locale: ko\n"
+        f"PricingData:\n{_AsJson(pricing_summary)}\n"
+        f"UsageData:\n{_AsJson(usage_summary)}"
     )
-    summary = GetLlmService().Generate(prompt)
-
-    return SummaryResponse(
-        summary=summary,
-        data=pricing,
-        model_used=GetLlmService().model_id,
+    llm_messages = [
+        {
+            "role": "system",
+            "content": system_context,
+        },
+        {
+            "role": payload.message.role,
+            "content": payload.message.content,
+        }
+    ]
+    reply = GetLlmService().GenerateChat(llm_messages)
+    return AssistantResponse(
+        text=reply,
+        model=GetLlmService().model_id,
     )
 
 
-@router.post("/v1/summary/usage", response_model=SummaryResponse)
-def SummarizeUsage(payload: UsageSummaryRequest) -> SummaryResponse:
-    data_store = GetDataStore()
-    usage = data_store.GetUsageSummary(payload.user_id, None)
-    if not usage:
-        raise HTTPException(status_code=404, detail="usage data not found")
-
-    prompt = BuildUsageSummaryPrompt(
-        usage_summary=usage,
-        locale="ko-KR",
-    )
-    summary = GetLlmService().Generate(prompt)
-
-    return SummaryResponse(
-        summary=summary,
-        data=usage,
-        model_used=GetLlmService().model_id,
-    )
+@router.post("/generate", response_model=AssistantResponse)
+def Generate(payload: AssistantRequest) -> AssistantResponse:
+    return _GenerateResponse(payload)
 
 
 @router.post("/v1/assistant", response_model=AssistantResponse)
 def Assistant(payload: AssistantRequest) -> AssistantResponse:
-    data_store = GetDataStore()
-    pricing = {}
-    usage = {}
-
-    if payload.include_pricing:
-        pricing = data_store.GetPricingSummary(payload.user_id, payload.period)
-    if payload.include_usage:
-        usage = data_store.GetUsageSummary(payload.user_id, payload.period)
-
-    prompt = BuildAssistantPrompt(
-        message=payload.message,
-        pricing_summary=pricing,
-        usage_summary=usage,
-        locale=payload.locale,
-    )
-    reply = GetLlmService().Generate(prompt)
-
-    return AssistantResponse(
-        reply=reply,
-        data={
-            "pricing": pricing,
-            "usage": usage,
-        },
-        model_used=GetLlmService().model_id,
-    )
+    return _GenerateResponse(payload)
