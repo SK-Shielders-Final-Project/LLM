@@ -43,6 +43,10 @@ class Settings:
     rentals_table: str = os.getenv("RENTALS_TABLE", "")
     payments_table: str = os.getenv("PAYMENTS_TABLE", "")
     bikes_table: str = os.getenv("BIKES_TABLE", "")
+    files_table: str = os.getenv("FILES_TABLE", "")
+    notices_table: str = os.getenv("NOTICES_TABLE", "")
+    inquiries_table: str = os.getenv("INQUIRIES_TABLE", "")
+    chat_table: str = os.getenv("CHAT_TABLE", "chat")
 
     bastion_host: str = os.getenv("BASTION_HOST", "")
     bastion_port: int = int(os.getenv("BASTION_PORT", "22"))
