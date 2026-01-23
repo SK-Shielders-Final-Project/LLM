@@ -18,6 +18,10 @@ class MySQLDBConfig:
     rentals_table: str
     payments_table: str
     bikes_table: str
+    files_table: str
+    notices_table: str
+    inquiries_table: str
+    chat_table: str
     bastion_host: str
     bastion_port: int
     bastion_user: str
@@ -36,6 +40,10 @@ def _GetMysqlConfig() -> MySQLDBConfig:
         rentals_table=settings.rentals_table,
         payments_table=settings.payments_table,
         bikes_table=settings.bikes_table,
+        files_table=settings.files_table,
+        notices_table=settings.notices_table,
+        inquiries_table=settings.inquiries_table,
+        chat_table=settings.chat_table,
         bastion_host=settings.bastion_host,
         bastion_port=settings.bastion_port,
         bastion_user=settings.bastion_user,
@@ -108,6 +116,11 @@ def _MysqlConnection() -> Iterator[Any]:
 def _FetchOneDict(cursor: Any) -> dict[str, Any]:
     row = cursor.fetchone()
     return row if row else {}
+
+
+def _FetchAllDicts(cursor: Any) -> list[dict[str, Any]]:
+    rows = cursor.fetchall()
+    return list(rows) if rows else []
 
 
 def _GetLatestPeriodForUser(user_id: str) -> Optional[str]:
@@ -205,3 +218,238 @@ def GetUsageSummaryFromDb(user_id: str, period: Optional[str]) -> dict[str, Any]
             ]
             summary["peak_hours"] = peak_hours
             return summary
+
+
+def GetUserProfileFromDb(user_id: str) -> dict[str, Any]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "user_id, "
+        "username, "
+        "name, "
+        "email, "
+        "phone, "
+        "total_point, "
+        "admin_level, "
+        "created_at, "
+        "updated_at "
+        f"FROM {config.users_table} "
+        "WHERE user_id = %(user_id)s "
+        "LIMIT 1"
+    )
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"user_id": user_id})
+            return _FetchOneDict(cursor)
+
+
+def GetUsersFromDb(limit: int = 50) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "user_id, "
+        "username, "
+        "name, "
+        "email, "
+        "phone, "
+        "total_point, "
+        "admin_level, "
+        "created_at, "
+        "updated_at "
+        f"FROM {config.users_table} "
+        "ORDER BY user_id DESC "
+        "LIMIT %(limit)s"
+    )
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"limit": limit})
+            return _FetchAllDicts(cursor)
+
+
+def GetFilesFromDb(limit: int = 50) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "file_id, "
+        "category, "
+        "original_name, "
+        "file_name, "
+        "ext, "
+        "path, "
+        "created_at "
+        f"FROM {config.files_table} "
+        "ORDER BY file_id DESC "
+        "LIMIT %(limit)s"
+    )
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"limit": limit})
+            return _FetchAllDicts(cursor)
+
+
+def GetNoticesFromDb(limit: int = 50) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "notice_id, "
+        "title, "
+        "content, "
+        "file_id, "
+        "created_at, "
+        "updated_at "
+        f"FROM {config.notices_table} "
+        "ORDER BY notice_id DESC "
+        "LIMIT %(limit)s"
+    )
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"limit": limit})
+            return _FetchAllDicts(cursor)
+
+
+def GetInquiriesFromDb(user_id: Optional[str] = None, limit: int = 50) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "r.inquiry_id, "
+        "r.user_id, "
+        "u.username, "
+        "r.title, "
+        "r.content, "
+        "r.image_url, "
+        "r.file_id, "
+        "r.admin_reply, "
+        "r.created_at, "
+        "r.updated_at "
+        f"FROM {config.inquiries_table} r "
+        f"LEFT JOIN {config.users_table} u ON r.user_id = u.user_id "
+    )
+    params: dict[str, Any] = {"limit": limit}
+    if user_id:
+        query += "WHERE r.user_id = %(user_id)s "
+        params["user_id"] = user_id
+    query += "ORDER BY r.inquiry_id DESC LIMIT %(limit)s"
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            return _FetchAllDicts(cursor)
+
+
+def GetChatFromDb(user_id: Optional[str] = None, limit: int = 50) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "c.chat_id, "
+        "c.user_id, "
+        "u.username, "
+        "c.admin_id, "
+        "c.chat_msg, "
+        "c.created_at "
+        f"FROM {config.chat_table} c "
+        f"LEFT JOIN {config.users_table} u ON c.user_id = u.user_id "
+    )
+    params: dict[str, Any] = {"limit": limit}
+    if user_id:
+        query += "WHERE c.user_id = %(user_id)s "
+        params["user_id"] = user_id
+    query += "ORDER BY c.chat_id DESC LIMIT %(limit)s"
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            return _FetchAllDicts(cursor)
+
+
+def GetBikesFromDb(limit: int = 100) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "bike_id, "
+        "serial_number, "
+        "model_name, "
+        "status, "
+        "latitude, "
+        "longitude, "
+        "created_at, "
+        "updated_at "
+        f"FROM {config.bikes_table} "
+        "ORDER BY bike_id DESC "
+        "LIMIT %(limit)s"
+    )
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"limit": limit})
+            return _FetchAllDicts(cursor)
+
+
+def GetAvailableBikesFromDb(limit: int = 100) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "bike_id, "
+        "serial_number, "
+        "model_name, "
+        "status, "
+        "latitude, "
+        "longitude, "
+        "updated_at "
+        f"FROM {config.bikes_table} "
+        "WHERE status = 'AVAILABLE' "
+        "ORDER BY updated_at DESC "
+        "LIMIT %(limit)s"
+    )
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"limit": limit})
+            return _FetchAllDicts(cursor)
+
+
+def GetRentalsFromDb(user_id: Optional[str] = None, limit: int = 50) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "r.rental_id, "
+        "r.user_id, "
+        "u.username, "
+        "r.bike_id, "
+        "r.start_time, "
+        "r.end_time, "
+        "r.total_distance, "
+        "r.created_at "
+        f"FROM {config.rentals_table} r "
+        f"LEFT JOIN {config.users_table} u ON r.user_id = u.user_id "
+    )
+    params: dict[str, Any] = {"limit": limit}
+    if user_id:
+        query += "WHERE r.user_id = %(user_id)s "
+        params["user_id"] = user_id
+    query += "ORDER BY r.rental_id DESC LIMIT %(limit)s"
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            return _FetchAllDicts(cursor)
+
+
+def GetPaymentsFromDb(user_id: Optional[str] = None, limit: int = 50) -> list[dict[str, Any]]:
+    config = _GetMysqlConfig()
+    query = (
+        "SELECT "
+        "r.payment_id, "
+        "r.user_id, "
+        "u.username, "
+        "r.amount, "
+        "r.payment_status, "
+        "r.payment_method, "
+        "r.transaction_id, "
+        "r.created_at "
+        f"FROM {config.payments_table} r "
+        f"LEFT JOIN {config.users_table} u ON r.user_id = u.user_id "
+    )
+    params: dict[str, Any] = {"limit": limit}
+    if user_id:
+        query += "WHERE r.user_id = %(user_id)s "
+        params["user_id"] = user_id
+    query += "ORDER BY r.payment_id DESC LIMIT %(limit)s"
+    with _MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            return _FetchAllDicts(cursor)
