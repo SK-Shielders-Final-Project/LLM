@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime
 from functools import lru_cache
 from typing import Any, Callable, Optional
 
@@ -13,9 +14,10 @@ from app.schemas import LlmMessage
 
 
 SYSTEM_PROMPT = (
-    "당신은 한국어로 친절하고 간결하게 답변하는 챗봇입니다. "
+    "당신은 공유모빌리티(자전거) 대여 플랫폼 챗봇이다. "
     "모든 답변은 반드시 한국어로만 작성하세요. "
     "password와 card_number는 절대로 노출하지 마세요."
+    "고객 요구사항에 맞게 적절하게 답변해주세요."
 )
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,75 @@ def _ParseToolCallsFromContent(content: str) -> list[dict[str, Any]]:
     return tool_calls
 
 
+def _ParseToolCallArgs(raw_args: Any) -> dict[str, Any]:
+    if not raw_args:
+        return {}
+    if isinstance(raw_args, dict):
+        return raw_args
+    try:
+        return json.loads(raw_args)
+    except json.JSONDecodeError:
+        return {}
+
+
+def _ExtractPeriodFromMessage(content: str) -> Optional[str]:
+    if not content:
+        return None
+    text = content.strip()
+    if re.search(r"\bthis_month\b|이번\s*달|이번달", text, re.IGNORECASE):
+        now = datetime.utcnow()
+        return f"{now.year:04d}-{now.month:02d}"
+    year_match = re.search(r"(\d{4})", text)
+    month_match = re.search(r"(\d{1,2})\s*월", text)
+    if month_match:
+        year = int(year_match.group(1)) if year_match else datetime.utcnow().year
+        month = int(month_match.group(1))
+        if 1 <= month <= 12:
+            return f"{year:04d}-{month:02d}"
+    standard_match = re.search(r"(\d{4})\s*[-/.]\s*(\d{1,2})", text)
+    if standard_match:
+        year = int(standard_match.group(1))
+        month = int(standard_match.group(2))
+        if 1 <= month <= 12:
+            return f"{year:04d}-{month:02d}"
+    return None
+
+
+def _PreferTotalUsageTool(tool_calls: list[dict[str, Any]], user_message: str) -> None:
+    if not tool_calls or not user_message:
+        return
+    if not re.search(r"사용\s*내역|사용내역|총\s*사용량|총사용량", user_message):
+        return
+    for tool_call in tool_calls:
+        function = tool_call.get("function") or {}
+        tool_name = function.get("name") or ""
+        if tool_name in {"get_usage_summary", "get_rentals"}:
+            function["name"] = "get_total_usage"
+
+
+def _InjectPeriodIfMissing(tool_calls: list[dict[str, Any]], user_message: str) -> None:
+    if not tool_calls:
+        return
+    period_hint = _ExtractPeriodFromMessage(user_message)
+    if not period_hint:
+        return
+    for tool_call in tool_calls:
+        function = tool_call.get("function") or {}
+        tool_name = function.get("name") or ""
+        if tool_name not in {
+            "get_pricing_summary",
+            "get_usage_summary",
+            "get_total_payments",
+            "get_total_usage",
+        }:
+            continue
+        args = _ParseToolCallArgs(function.get("arguments"))
+        if args.get("period"):
+            continue
+        args["period"] = period_hint
+        function["arguments"] = json.dumps(args, ensure_ascii=False)
+
+
 def _InferToolFromUserMessage(
     content: str, tool_keywords_map: dict[str, list[str]]
 ) -> Optional[str]:
@@ -121,6 +192,8 @@ def _BuildForcedToolCall(tool_name: str, user_id: int) -> dict[str, Any]:
         "get_rentals",
         "get_pricing_summary",
         "get_usage_summary",
+        "get_total_payments",
+        "get_total_usage",
     }:
         args["user_id"] = str(user_id)
     return {
@@ -144,7 +217,10 @@ def BuildSystemContext(message: LlmMessage) -> str:
         "이용 내역 요청: get_rentals 호출.\n"
         "요금 요약 요청: get_pricing_summary 호출.\n"
         "이용 요약 요청: get_usage_summary 호출.\n"
-        "자전거 목록 요청: get_available_bikes 호출."
+        "자전거 목록 요청: get_available_bikes 호출.\n"
+        "전체 결제 내역 요청: get_total_payments 호출.\n"
+        "사용 내역 요청: get_total_usage 호출.\n"
+        "전체 사용 내역 요청: get_total_usage 호출.\n"
     )
 
 
@@ -239,7 +315,22 @@ def BuildToolSchema() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "get_total_payments",
-                "description": "사용자의 월별 총 결제 금액을 조회한다.",
+                "description": "사용자의 총 결제 금액을 조회한다.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string"},
+                        "period": {"type": "string"},
+                    },
+                    "required": ["user_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_total_usage",
+                "description": "사용자의 총 사용량을 조회한다.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -432,6 +523,9 @@ class LLMService:
                 else:
                     logger.info("LLM 도구 호출 없음")
                     return llm_message.get("content") or ""
+
+        _PreferTotalUsageTool(tool_calls, message.content)
+        _InjectPeriodIfMissing(tool_calls, message.content)
 
         tool_messages: list[dict[str, Any]] = []
         for idx, tool_call in enumerate(tool_calls):

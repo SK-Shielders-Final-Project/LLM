@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class LlmMessage(BaseModel):
     role: Literal["system", "user", "assistant"] = Field(
         ...,
-        examples=["system", "user", "assistant"],
+        examples=["user"],
         description="메시지 역할",
     )
     user_id: int = Field(..., examples=[1], description="대화 소유 사용자 ID")
