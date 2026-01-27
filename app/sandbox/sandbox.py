@@ -9,6 +9,7 @@ from app.sandbox.queries import (
     GetPaymentsFromDb,
     GetPricingSummaryFromDb,
     GetRentalsFromDb,
+    GetTotalPaymentFromDb,
     GetUsageSummaryFromDb,
     GetUserProfileFromDb,
 )
@@ -37,6 +38,9 @@ class Sandbox:
 
     def GetUsageSummary(self, user_id: Any, period: Optional[str] = None) -> dict[str, Any]:
         return GetUsageSummaryFromDb(_NormalizeUserId(user_id), period)
+
+    def GetTotalPayments(self, user_id: Any, period: Optional[str] = None) -> dict[str, Any]:
+        return GetTotalPaymentFromDb(_NormalizeUserId(user_id), period)
 
 
 @lru_cache(maxsize=1)
