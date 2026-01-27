@@ -1,9 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import router as v1_router
-from app.core.logging import ConfigureLogging
-from app.core.settings import GetSettings
+from app.api.v1 import router as api_router
+from app.config import ConfigureLogging, GetSettings
 
 
 def CreateApp() -> FastAPI:
@@ -23,7 +22,7 @@ def CreateApp() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(v1_router, prefix="/api")
+    app.include_router(api_router, prefix="/api")
 
     @app.get("/health")
     def Health() -> dict:
