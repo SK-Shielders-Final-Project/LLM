@@ -1,11 +1,10 @@
+from datetime import datetime
+import re
 from typing import Any, Optional
 
-from app.core.services_db import (
-    FetchOneDict,
-    GetLatestPeriodForUser,
-    GetMysqlConfig,
-    MysqlConnection,
-)
+from app.core.services_db import FetchOneDict, GetMysqlConfig, MysqlConnection
+from app.sandbox.sub_query.date import _ResolvePeriodFromText
+from app.sandbox.sub_query.getLastUser import GetLatestPeriodForUser
 
 
 def GetPricingSummaryFromDb(user_id: str, period: Optional[str]) -> dict[str, Any]:
@@ -80,3 +79,28 @@ def GetUsageSummaryFromDb(user_id: str, period: Optional[str]) -> dict[str, Any]
             ]
             summary["peak_hours"] = peak_hours
             return summary
+            
+def GetTotalPaymentFromDb(user_id: str, period: Optional[str] = None) -> dict[str, Any]:
+    config = GetMysqlConfig()
+    resolved_period = _ResolvePeriodFromText(period, user_id)
+    if not resolved_period:
+        return {}
+    query = (
+        "SELECT "
+        "%(user_id)s AS user_id, "
+        "%(period)s AS period, "
+        "'KRW' AS currency, "
+        "COALESCE(SUM(amount), 0) AS total_amount "
+        f"FROM {config.payments_table} "
+        "WHERE user_id = %(user_id)s "
+        "AND payment_status = 'COMPLETED' "
+        "AND DATE_FORMAT(created_at, '%%Y-%%m') = %(period)s"
+    )
+    with MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"user_id": user_id, "period": resolved_period})
+            return FetchOneDict(cursor)
+
+
+def GetTotalPayment(user_id: str, period: Optional[str] = None) -> dict[str, Any]:
+    return GetTotalPaymentFromDb(user_id, period)

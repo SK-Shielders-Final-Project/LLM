@@ -69,6 +69,33 @@ def _ParseContextLimitFromError(body: str) -> Optional[tuple[int, int]]:
     return int(match.group(1)), int(match.group(2))
 
 
+def _ParseToolCallsFromContent(content: str) -> list[dict[str, Any]]:
+    if not content:
+        return []
+    tool_calls: list[dict[str, Any]] = []
+    for match in re.finditer(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", content, re.DOTALL):
+        raw = match.group(1)
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        name = payload.get("name")
+        arguments = payload.get("arguments", {})
+        if not name:
+            continue
+        tool_calls.append(
+            {
+                "id": f"content_tool_call_{len(tool_calls)}",
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": json.dumps(arguments, ensure_ascii=False),
+                },
+            }
+        )
+    return tool_calls
+
+
 def _InferToolFromUserMessage(
     content: str, tool_keywords_map: dict[str, list[str]]
 ) -> Optional[str]:
@@ -131,7 +158,7 @@ def BuildToolSchema() -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 10},
                     },
                 },
             },
@@ -145,7 +172,7 @@ def BuildToolSchema() -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "user_id": {"type": "string"},
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 10},
                     },
                     "required": ["user_id"],
                 },
@@ -198,6 +225,21 @@ def BuildToolSchema() -> list[dict[str, Any]]:
             "function": {
                 "name": "get_usage_summary",
                 "description": "사용자의 이용 요약을 조회한다.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string"},
+                        "period": {"type": "string"},
+                    },
+                    "required": ["user_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_total_payments",
+                "description": "사용자의 월별 총 결제 금액을 조회한다.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -376,16 +418,20 @@ class LLMService:
         llm_message = self.GenerateChatWithTools(llm_messages, tools)
         tool_calls = llm_message.get("tool_calls") or []
         if not tool_calls:
-            inferred_tool = _InferToolFromUserMessage(
-                message.content, self._settings.tool_keywords_map
-            )
-            if inferred_tool:
-                logger.info("도구 호출 없음: 의도 기반 보정 tool=%s", inferred_tool)
-                forced_tool_call = _BuildForcedToolCall(inferred_tool, message.user_id)
-                tool_calls = [forced_tool_call]
+            content_tool_calls = _ParseToolCallsFromContent(llm_message.get("content") or "")
+            if content_tool_calls:
+                tool_calls = content_tool_calls
             else:
-                logger.info("LLM 도구 호출 없음")
-                return llm_message.get("content") or ""
+                inferred_tool = _InferToolFromUserMessage(
+                    message.content, self._settings.tool_keywords_map
+                )
+                if inferred_tool:
+                    logger.info("도구 호출 없음: 의도 기반 보정 tool=%s", inferred_tool)
+                    forced_tool_call = _BuildForcedToolCall(inferred_tool, message.user_id)
+                    tool_calls = [forced_tool_call]
+                else:
+                    logger.info("LLM 도구 호출 없음")
+                    return llm_message.get("content") or ""
 
         tool_messages: list[dict[str, Any]] = []
         for idx, tool_call in enumerate(tool_calls):

@@ -3,7 +3,7 @@ from typing import Any
 from app.core.services_db import FetchAllDicts, GetMysqlConfig, MysqlConnection
 
 
-def GetAvailableBikesFromDb(limit: int = 100) -> list[dict[str, Any]]:
+def GetAvailableBikesFromDb(limit: int = 10) -> list[dict[str, Any]]:
     config = GetMysqlConfig()
     query = (
         "SELECT "
