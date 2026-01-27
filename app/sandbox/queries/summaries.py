@@ -1,5 +1,3 @@
-from datetime import datetime
-import re
 from typing import Any, Optional
 
 from app.core.services_db import FetchOneDict, GetMysqlConfig, MysqlConnection
@@ -54,13 +52,13 @@ def GetUsageSummaryFromDb(user_id: str, period: Optional[str]) -> dict[str, Any]
         "NULL AS favorite_zone "
         f"FROM {config.rentals_table} r "
         "WHERE r.user_id = %(user_id)s "
-        "AND DATE_FORMAT(COALESCE(r.start_time, r.created_at), '%%Y-%%m') = %(period)s"
+        "AND DATE_FORMAT(r.created_at, '%%Y-%%m') = %(period)s"
     )
     peak_query = (
         "SELECT HOUR(r.start_time) AS hour_bucket "
         f"FROM {config.rentals_table} r "
         "WHERE r.user_id = %(user_id)s "
-        "AND DATE_FORMAT(COALESCE(r.start_time, r.created_at), '%%Y-%%m') = %(period)s "
+        "AND DATE_FORMAT(r.created_at, '%%Y-%%m') = %(period)s "
         "GROUP BY hour_bucket "
         "ORDER BY COUNT(*) DESC "
         "LIMIT 2"
@@ -79,7 +77,7 @@ def GetUsageSummaryFromDb(user_id: str, period: Optional[str]) -> dict[str, Any]
             ]
             summary["peak_hours"] = peak_hours
             return summary
-            
+
 def GetTotalPaymentFromDb(user_id: str, period: Optional[str] = None) -> dict[str, Any]:
     config = GetMysqlConfig()
     resolved_period = _ResolvePeriodFromText(period, user_id)
@@ -90,7 +88,12 @@ def GetTotalPaymentFromDb(user_id: str, period: Optional[str] = None) -> dict[st
         "%(user_id)s AS user_id, "
         "%(period)s AS period, "
         "'KRW' AS currency, "
-        "COALESCE(SUM(amount), 0) AS total_amount "
+        "COALESCE(SUM(CASE WHEN payment_method = 'CARD' THEN amount ELSE 0 END), 0) "
+        "AS card_amount, "
+        "COALESCE(SUM(CASE WHEN payment_method = 'POINT' THEN amount ELSE 0 END), 0) "
+        "AS point_amount, "
+        "COALESCE(SUM(CASE WHEN payment_method IN ('CARD', 'POINT') THEN amount ELSE 0 END), 0) "
+        "AS total_amount "
         f"FROM {config.payments_table} "
         "WHERE user_id = %(user_id)s "
         "AND payment_status = 'COMPLETED' "
@@ -102,5 +105,44 @@ def GetTotalPaymentFromDb(user_id: str, period: Optional[str] = None) -> dict[st
             return FetchOneDict(cursor)
 
 
-def GetTotalPayment(user_id: str, period: Optional[str] = None) -> dict[str, Any]:
-    return GetTotalPaymentFromDb(user_id, period)
+def GetTotalUsageFromDb(user_id: str, period: Optional[str] = None) -> dict[str, Any]:
+    config = GetMysqlConfig()
+    reserved_period = _ResolvePeriodFromText(period, user_id)
+
+    if not reserved_period:
+        return {}
+
+    rentals_query = (
+        "SELECT "
+        "COUNT(rental_id) AS total_rentals, "
+        "COALESCE(SUM(TIMESTAMPDIFF(MINUTE, "
+        "COALESCE(start_time, created_at), "
+        "COALESCE(end_time, created_at))), 0) AS total_minutes "
+        f"FROM {config.rentals_table} "
+        "WHERE user_id = %(user_id)s "
+        "AND DATE_FORMAT(created_at, '%%Y-%%m') = %(period)s"
+    )
+    payments_query = (
+        "SELECT "
+        "COUNT(amount) AS total_payments, "
+        "COALESCE(SUM(amount), 0) AS total_amount "
+        f"FROM {config.payments_table} "
+        "WHERE user_id = %(user_id)s "
+        "AND payment_status = 'COMPLETED' "
+        "AND DATE_FORMAT(created_at, '%%Y-%%m') = %(period)s"
+    )
+    with MysqlConnection() as connection:
+        with connection.cursor() as cursor:
+            params = {"user_id": user_id, "period": reserved_period}
+            cursor.execute(rentals_query, params)
+            rentals_summary = FetchOneDict(cursor) or {}
+            cursor.execute(payments_query, params)
+            payments_summary = FetchOneDict(cursor) or {}
+            return {
+                "user_id": user_id,
+                "period": reserved_period,
+                "total_rentals": rentals_summary.get("total_rentals", 0),
+                "total_minutes": rentals_summary.get("total_minutes", 0),
+                "total_amount": payments_summary.get("total_amount", 0),
+                "total_payments": payments_summary.get("total_payments", 0),
+            }

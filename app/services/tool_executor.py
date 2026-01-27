@@ -84,4 +84,11 @@ def ExecuteTool(tool_name: str, args: dict[str, Any], user_id: int) -> dict[str,
                 user_id=resolved_user_id, period=args.get("period")
             ),
         }
+    if tool_name == "get_total_usage":
+        return {
+            "tool": tool_name,
+            "data": sandbox.GetTotalUsage(
+                user_id=resolved_user_id, period=args.get("period")
+            ),
+        }
     return {"tool": tool_name, "error": "unsupported_tool"}
