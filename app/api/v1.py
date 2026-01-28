@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+import requests
 
 from app.core.llm_service import GetLlmService
 from app.schemas import AssistantRequest, AssistantResponse, LlmMessage
@@ -23,7 +24,13 @@ def _GenerateResponse(payload: AssistantRequest) -> AssistantResponse:
     _ValidateMessage(message)
 
     service = GetLlmService()
-    reply = service.GenerateAssistantReply(message, ExecuteToolCall)
+    try:
+        reply = service.GenerateAssistantReply(message, ExecuteToolCall)
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM 서버 연결 실패: {exc.__class__.__name__}",
+        ) from exc
     return AssistantResponse(text=reply, model=service.model_id)
 
 

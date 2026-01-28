@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import os
 from typing import Any, Iterator, Optional
 
 from app.config.config import GetSettings
@@ -111,7 +112,23 @@ def MysqlConnection() -> Iterator[Any]:
     host = config.host
     port = config.port
 
-    if config.bastion_host and config.bastion_user and config.bastion_key_path:
+    if config.bastion_host or config.bastion_user or config.bastion_key_path:
+        if not (config.bastion_host and config.bastion_user and config.bastion_key_path):
+            raise RuntimeError(
+                "Bastion settings are incomplete: BASTION_HOST/BASTION_USER/BASTION_KEY_PATH are required"
+            )
+        if not os.path.exists(config.bastion_key_path):
+            raise RuntimeError(
+                f"BASTION_KEY_PATH does not exist: {config.bastion_key_path}"
+            )
+        if not os.path.isfile(config.bastion_key_path):
+            raise RuntimeError(
+                f"BASTION_KEY_PATH is not a file: {config.bastion_key_path}"
+            )
+        if not os.access(config.bastion_key_path, os.R_OK):
+            raise RuntimeError(
+                f"BASTION_KEY_PATH is not readable: {config.bastion_key_path}"
+            )
         try:
             from sshtunnel import SSHTunnelForwarder  # type: ignore
         except Exception as exc:  # pragma: no cover - optional dependency
