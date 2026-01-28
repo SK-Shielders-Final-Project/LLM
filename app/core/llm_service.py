@@ -16,7 +16,8 @@ from app.schemas import LlmMessage
 SYSTEM_PROMPT = (
     "당신은 공유모빌리티(자전거) 대여 플랫폼 챗봇이다. "
     "모든 답변은 반드시 한국어로만 작성하세요. "
-    "password와 card_number는 절대로 노출하지 마세요."
+    "password와 card_number는 절대로 노출하지 마세요. "
+    "안전 수칙 요청에는 핵심 수칙을 5~8개로 간결히 안내하세요. "
     "고객 요구사항에 맞게 적절하게 답변해주세요."
 )
 
@@ -447,6 +448,9 @@ class LLMService:
         if not choices:
             return {}
         message = choices[0].get("message") or {}
+        finish_reason = choices[0].get("finish_reason")
+        if isinstance(message, dict):
+            message["_finish_reason"] = finish_reason
         return message
 
     def _PostRequest(
@@ -480,8 +484,24 @@ class LLMService:
             raise exc
 
     def _PostChat(self, messages: list[dict[str, Any]]) -> str:
-        message = self._PostChatMessage(messages)
-        return message.get("content") or ""
+        accumulated: list[str] = []
+        current_messages = list(messages)
+        max_continuations = 3
+        for _ in range(max_continuations):
+            message = self._PostChatMessage(current_messages)
+            content = message.get("content") or ""
+            if content:
+                accumulated.append(content)
+            finish_reason = message.get("_finish_reason")
+            if finish_reason != "length":
+                break
+            if not content:
+                break
+            current_messages = current_messages + [
+                {"role": "assistant", "content": content},
+                {"role": "user", "content": "계속"},
+            ]
+        return "".join(accumulated)
 
     def Generate(self, prompt: str) -> str:
         return self.GenerateChat([{"role": "user", "content": prompt}])
@@ -505,24 +525,34 @@ class LLMService:
             {"role": "system", "content": BuildSystemContext(message)},
             {"role": message.role, "content": message.content},
         ]
-        tools = BuildToolSchema()
-        llm_message = self.GenerateChatWithTools(llm_messages, tools)
+        inferred_tool = _InferToolFromUserMessage(
+            message.content, self._settings.tool_keywords_map
+        )
+        tools = BuildToolSchema() if inferred_tool else None
+        if tools:
+            llm_message = self.GenerateChatWithTools(llm_messages, tools)
+        else:
+            llm_message = self._PostChatMessage(llm_messages)
         tool_calls = llm_message.get("tool_calls") or []
         if not tool_calls:
-            content_tool_calls = _ParseToolCallsFromContent(llm_message.get("content") or "")
+            raw_content = llm_message.get("content") or ""
+            content_tool_calls = _ParseToolCallsFromContent(raw_content)
             if content_tool_calls:
                 tool_calls = content_tool_calls
             else:
-                inferred_tool = _InferToolFromUserMessage(
-                    message.content, self._settings.tool_keywords_map
-                )
+                if "<tool_call>" in raw_content:
+                    logger.warning("불완전한 tool_call 감지: 내용 무시 후 보정")
                 if inferred_tool:
                     logger.info("도구 호출 없음: 의도 기반 보정 tool=%s", inferred_tool)
                     forced_tool_call = _BuildForcedToolCall(inferred_tool, message.user_id)
                     tool_calls = [forced_tool_call]
                 else:
                     logger.info("LLM 도구 호출 없음")
-                    return llm_message.get("content") or ""
+                    content = llm_message.get("content") or ""
+                    if content:
+                        return content
+                    logger.info("LLM 응답 비어있음: 도구 없이 재시도")
+                    return self.GenerateChat(llm_messages)
 
         _PreferTotalUsageTool(tool_calls, message.content)
         _InjectPeriodIfMissing(tool_calls, message.content)

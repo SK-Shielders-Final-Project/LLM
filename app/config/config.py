@@ -68,11 +68,12 @@ class Settings:
 
     db_backend: str = os.getenv("DB_BACKEND", "")
 
-    mysql_host: str = os.getenv("MYSQL_HOST", "")
-    mysql_port: int = int(os.getenv("MYSQL_PORT", ""))
-    mysql_user: str = os.getenv("MYSQL_USER", "")
-    mysql_password: str = os.getenv("MYSQL_PASSWORD", "")
-    mysql_database: str = os.getenv("MYSQL_DATABASE", "")
+    oracle_host: str = os.getenv("ORACLE_HOST", "")
+    oracle_port: int = int(os.getenv("ORACLE_PORT", "1521") or 1521)
+    oracle_user: str = os.getenv("ORACLE_USER", "")
+    oracle_password: str = os.getenv("ORACLE_PASSWORD", "")
+    oracle_service: str = os.getenv("ORACLE_SERVICE", "")
+    oracle_dsn: str = os.getenv("ORACLE_DSN", "")
 
     users_table: str = os.getenv("USERS_TABLE", "")
     rentals_table: str = os.getenv("RENTALS_TABLE", "")

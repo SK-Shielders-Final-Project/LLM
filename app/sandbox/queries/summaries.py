@@ -12,22 +12,23 @@ def GetPricingSummaryFromDb(user_id: str, period: Optional[str]) -> dict[str, An
         return {}
     query = (
         "SELECT "
-        "%(user_id)s AS user_id, "
-        "%(period)s AS period, "
+        ":user_id AS user_id, "
+        ":period AS period, "
         "'KRW' AS currency, "
-        "COALESCE(SUM(p.amount), 0) AS total_amount, "
+        "NVL(SUM(p.amount), 0) AS total_amount, "
         "0 AS discounts, "
-        "COALESCE(COUNT(r.rental_id), 0) AS rides, "
+        "COUNT(r.rental_id) AS rides, "
         "CASE "
         "WHEN COUNT(r.rental_id) = 0 THEN 0 "
-        "ELSE ROUND(COALESCE(SUM(p.amount), 0) / COUNT(r.rental_id)) "
+        "ELSE ROUND(NVL(SUM(p.amount), 0) / COUNT(r.rental_id)) "
         "END AS avg_price "
         f"FROM {config.payments_table} p "
         f"LEFT JOIN {config.rentals_table} r "
         "ON p.user_id = r.user_id "
-        "AND DATE_FORMAT(COALESCE(r.start_time, r.created_at), '%%Y-%%m') = %(period)s "
-        "WHERE p.user_id = %(user_id)s "
-        "AND DATE_FORMAT(p.created_at, '%%Y-%%m') = %(period)s"
+        "AND TO_CHAR(NVL(r.start_time, r.created_at), 'YYYY-MM') = :period "
+        "WHERE p.user_id = :user_id "
+        "AND p.payment_status = 'DONE' "
+        "AND TO_CHAR(p.created_at, 'YYYY-MM') = :period"
     )
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:
@@ -42,26 +43,26 @@ def GetUsageSummaryFromDb(user_id: str, period: Optional[str]) -> dict[str, Any]
         return {}
     summary_query = (
         "SELECT "
-        "%(user_id)s AS user_id, "
-        "%(period)s AS period, "
-        "COALESCE(COUNT(r.rental_id), 0) AS total_rides, "
-        "COALESCE(ROUND(SUM(r.total_distance), 2), 0) AS total_distance_km, "
-        "COALESCE(SUM(TIMESTAMPDIFF(MINUTE, "
-        "COALESCE(r.start_time, r.created_at), COALESCE(r.end_time, r.created_at))), 0) "
+        ":user_id AS user_id, "
+        ":period AS period, "
+        "COUNT(r.rental_id) AS total_rides, "
+        "NVL(ROUND(SUM(r.total_distance), 2), 0) AS total_distance_km, "
+        "NVL(SUM((NVL(r.end_time, r.created_at) - NVL(r.start_time, r.created_at)) "
+        "* 24 * 60), 0) "
         "AS total_minutes, "
         "NULL AS favorite_zone "
         f"FROM {config.rentals_table} r "
-        "WHERE r.user_id = %(user_id)s "
-        "AND DATE_FORMAT(r.created_at, '%%Y-%%m') = %(period)s"
+        "WHERE r.user_id = :user_id "
+        "AND TO_CHAR(r.created_at, 'YYYY-MM') = :period"
     )
     peak_query = (
-        "SELECT HOUR(r.start_time) AS hour_bucket "
+        "SELECT EXTRACT(HOUR FROM r.start_time) AS hour_bucket "
         f"FROM {config.rentals_table} r "
-        "WHERE r.user_id = %(user_id)s "
-        "AND DATE_FORMAT(r.created_at, '%%Y-%%m') = %(period)s "
+        "WHERE r.user_id = :user_id "
+        "AND TO_CHAR(r.created_at, 'YYYY-MM') = :period "
         "GROUP BY hour_bucket "
         "ORDER BY COUNT(*) DESC "
-        "LIMIT 2"
+        "FETCH FIRST 2 ROWS ONLY"
     )
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:
@@ -85,19 +86,19 @@ def GetTotalPaymentFromDb(user_id: str, period: Optional[str] = None) -> dict[st
         return {}
     query = (
         "SELECT "
-        "%(user_id)s AS user_id, "
-        "%(period)s AS period, "
+        ":user_id AS user_id, "
+        ":period AS period, "
         "'KRW' AS currency, "
-        "COALESCE(SUM(CASE WHEN payment_method = 'CARD' THEN amount ELSE 0 END), 0) "
+        "NVL(SUM(CASE WHEN payment_method = 'CARD' THEN amount ELSE 0 END), 0) "
         "AS card_amount, "
-        "COALESCE(SUM(CASE WHEN payment_method = 'POINT' THEN amount ELSE 0 END), 0) "
+        "NVL(SUM(CASE WHEN payment_method = 'POINT' THEN amount ELSE 0 END), 0) "
         "AS point_amount, "
-        "COALESCE(SUM(CASE WHEN payment_method IN ('CARD', 'POINT') THEN amount ELSE 0 END), 0) "
+        "NVL(SUM(CASE WHEN payment_method IN ('CARD', 'POINT') THEN amount ELSE 0 END), 0) "
         "AS total_amount "
         f"FROM {config.payments_table} "
-        "WHERE user_id = %(user_id)s "
-        "AND payment_status = 'COMPLETED' "
-        "AND DATE_FORMAT(created_at, '%%Y-%%m') = %(period)s"
+        "WHERE user_id = :user_id "
+        "AND payment_status = 'DONE' "
+        "AND TO_CHAR(created_at, 'YYYY-MM') = :period"
     )
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:
@@ -115,21 +116,20 @@ def GetTotalUsageFromDb(user_id: str, period: Optional[str] = None) -> dict[str,
     rentals_query = (
         "SELECT "
         "COUNT(rental_id) AS total_rentals, "
-        "COALESCE(SUM(TIMESTAMPDIFF(MINUTE, "
-        "COALESCE(start_time, created_at), "
-        "COALESCE(end_time, created_at))), 0) AS total_minutes "
+        "NVL(SUM((NVL(end_time, created_at) - NVL(start_time, created_at)) "
+        "* 24 * 60), 0) AS total_minutes "
         f"FROM {config.rentals_table} "
-        "WHERE user_id = %(user_id)s "
-        "AND DATE_FORMAT(created_at, '%%Y-%%m') = %(period)s"
+        "WHERE user_id = :user_id "
+        "AND TO_CHAR(created_at, 'YYYY-MM') = :period"
     )
     payments_query = (
         "SELECT "
         "COUNT(amount) AS total_payments, "
-        "COALESCE(SUM(amount), 0) AS total_amount "
+        "NVL(SUM(amount), 0) AS total_amount "
         f"FROM {config.payments_table} "
-        "WHERE user_id = %(user_id)s "
-        "AND payment_status = 'COMPLETED' "
-        "AND DATE_FORMAT(created_at, '%%Y-%%m') = %(period)s"
+        "WHERE user_id = :user_id "
+        "AND payment_status = 'DONE' "
+        "AND TO_CHAR(created_at, 'YYYY-MM') = :period"
     )
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:

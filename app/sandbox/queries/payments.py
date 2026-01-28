@@ -13,16 +13,18 @@ def GetPaymentsFromDb(user_id: Optional[str] = None, limit: int = 50) -> list[di
         "r.amount, "
         "r.payment_status, "
         "r.payment_method, "
-        "r.transaction_id, "
+        "r.payment_key, "
+        "r.order_id, "
+        "r.remain_amount, "
         "r.created_at "
         f"FROM {config.payments_table} r "
         f"LEFT JOIN {config.users_table} u ON r.user_id = u.user_id "
     )
     params: dict[str, Any] = {"limit": limit}
     if user_id:
-        query += "WHERE r.user_id = %(user_id)s "
+        query += "WHERE r.user_id = :user_id "
         params["user_id"] = user_id
-    query += "ORDER BY r.payment_id DESC LIMIT %(limit)s"
+    query += "ORDER BY r.payment_id DESC FETCH FIRST :limit ROWS ONLY"
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(query, params)

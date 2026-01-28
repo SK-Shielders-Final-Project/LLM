@@ -20,9 +20,9 @@ def GetRentalsFromDb(user_id: Optional[str] = None, limit: int = 50) -> list[dic
     )
     params: dict[str, Any] = {"limit": limit}
     if user_id:
-        query += "WHERE r.user_id = %(user_id)s "
+        query += "WHERE r.user_id = :user_id "
         params["user_id"] = user_id
-    query += "ORDER BY r.rental_id DESC LIMIT %(limit)s"
+    query += "ORDER BY r.rental_id DESC FETCH FIRST :limit ROWS ONLY"
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(query, params)
