@@ -9,7 +9,7 @@ from typing import Any, Callable, Optional
 
 import requests
 
-from app.config import GetSettings
+from app.config.config import GetSettings
 from app.schemas import LlmMessage
 
 
