@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator, Optional
 
-from app.config import GetSettings
+from app.config.config import GetSettings
 
 
 @dataclass(frozen=True)
