@@ -32,3 +32,10 @@ vllm serve "Qwen/Qwen2.5-3B-Instruct" \
   --max-model-len 1024 \
   --gpu-memory-utilization 0.80 \
   --host 0.0.0.0 --port 8001
+
+vllm serve RedHatAI/gemma-3-12b-it-FP8-dynamic \
+  --dtype bfloat16 \
+  --trust-remote-code \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.80 \
+  --host 0.0.0.0 --port 8001

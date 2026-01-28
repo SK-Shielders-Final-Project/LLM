@@ -7,13 +7,13 @@ def GetLatestPeriodForUser(user_id: str) -> Optional[str]:
     query = (
         "SELECT MAX(period) AS period "
         "FROM ("
-        f"SELECT DATE_FORMAT(p.created_at, '%%Y-%%m') AS period "
+        f"SELECT TO_CHAR(p.created_at, 'YYYY-MM') AS period "
         f"FROM {config.payments_table} p "
-        "WHERE p.user_id = %(user_id)s "
+        "WHERE p.user_id = :user_id "
         "UNION ALL "
-        f"SELECT DATE_FORMAT(COALESCE(r.start_time, r.created_at), '%%Y-%%m') AS period "
+        f"SELECT TO_CHAR(NVL(r.start_time, r.created_at), 'YYYY-MM') AS period "
         f"FROM {config.rentals_table} r "
-        "WHERE r.user_id = %(user_id)s"
+        "WHERE r.user_id = :user_id"
         ") t"
     )
     with MysqlConnection() as connection:

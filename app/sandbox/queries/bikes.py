@@ -17,7 +17,7 @@ def GetAvailableBikesFromDb(limit: int = 10) -> list[dict[str, Any]]:
         f"FROM {config.bikes_table} "
         "WHERE status = 'AVAILABLE' "
         "ORDER BY updated_at DESC "
-        "LIMIT %(limit)s"
+        "FETCH FIRST :limit ROWS ONLY"
     )
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:

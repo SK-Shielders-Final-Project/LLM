@@ -17,8 +17,8 @@ def GetUserProfileFromDb(user_id: str) -> dict[str, Any]:
         "created_at, "
         "updated_at "
         f"FROM {config.users_table} "
-        "WHERE user_id = %(user_id)s "
-        "LIMIT 1"
+        "WHERE user_id = :user_id "
+        "FETCH FIRST 1 ROWS ONLY"
     )
     with MysqlConnection() as connection:
         with connection.cursor() as cursor:
