@@ -36,6 +36,12 @@ def _LoadToolKeywordMap(path: str) -> dict[str, list[str]]:
     except (OSError, json.JSONDecodeError):
         return {}
 
+def _NormalizePath(path: str) -> str:
+    if not path:
+        return ""
+    expanded = os.path.expanduser(os.path.expandvars(path.strip()))
+    return expanded
+
 
 def _BuildBaseUrlFromParts() -> str:
     base_url = os.getenv("LLM_BASE_URL", "").strip()
@@ -101,7 +107,7 @@ class Settings:
     bastion_host: str = os.getenv("BASTION_HOST", "")
     bastion_port: int = int(os.getenv("BASTION_PORT", "22"))
     bastion_user: str = os.getenv("BASTION_USER", "")
-    bastion_key_path: str = os.getenv("BASTION_KEY_PATH", "")
+    bastion_key_path: str = _NormalizePath(os.getenv("BASTION_KEY_PATH", ""))
 
     cors_allow_origins: list[str] = field(
         default_factory=lambda: (
