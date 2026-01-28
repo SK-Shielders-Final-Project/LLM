@@ -37,6 +37,20 @@ def _LoadToolKeywordMap(path: str) -> dict[str, list[str]]:
         return {}
 
 
+def _BuildBaseUrlFromParts() -> str:
+    base_url = os.getenv("LLM_BASE_URL", "").strip()
+    if base_url:
+        return base_url
+    host = os.getenv("LLM_HOST", "").strip()
+    if not host:
+        return ""
+    scheme = os.getenv("LLM_SCHEME", "http").strip() or "http"
+    port = os.getenv("LLM_PORT", "").strip()
+    if port:
+        return f"{scheme}://{host}:{port}"
+    return f"{scheme}://{host}"
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "")
@@ -49,7 +63,7 @@ class Settings:
     max_model_len: int = int(os.getenv("MAX_MODEL_LEN", "4096"))
     trust_remote_code: bool = _EnvBool("TRUST_REMOTE_CODE", True)
 
-    llm_base_url: str = os.getenv("LLM_BASE_URL", "")
+    llm_base_url: str = _BuildBaseUrlFromParts()
     llm_api_key: str = os.getenv("LLM_API_KEY", "EMPTY")
     llm_timeout_sec: float = float(os.getenv("LLM_TIMEOUT_SEC", "60"))
     llm_tool_fallback_on_400: bool = _EnvBool("LLM_TOOL_FALLBACK_ON_400", True)
