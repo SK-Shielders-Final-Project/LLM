@@ -71,6 +71,7 @@ numpy==2.4.1
 openai==2.15.0
 openai-harmony==0.0.8
 opencv-python-headless==4.13.0.90
+oracledb==3.4.1
 outlines_core==0.2.11
 packaging==26.0
 paramiko==2.12.0
